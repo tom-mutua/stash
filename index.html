@@ -1,0 +1,1096 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex">
+<title>Stash</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b6b62'/%3E%3Cpath d='M16 21V9m-5 5 5-5 5 5M8 21v2h16v-2' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one working column. Slim header (repo + usage), a drop dock, a toolbar, then a file list that can flip to a grid. */
+:root{
+  --bg:#f1f4f5;--surface:#ffffff;--ink:#12202a;--muted:#55666f;--line:#dbe2e6;--soft:#e8edf0;
+  --accent:#0b6b62;--accent-ink:#ffffff;--accent-soft:#d7eeea;--danger:#b3261e;--danger-soft:#fbe4e2;
+  --shadow:0 1px 2px rgba(18,32,42,.06),0 10px 30px rgba(18,32,42,.10);
+  --ui:"Instrument Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0d1317;--surface:#151d23;--ink:#e5ecef;--muted:#8a9ba5;--line:#25323a;--soft:#1c262d;
+  --accent:#3dc2b0;--accent-ink:#06211d;--accent-soft:#12332f;--danger:#ff8a80;--danger-soft:#3a1d1b;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.45);color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1317;--surface:#151d23;--ink:#e5ecef;--muted:#8a9ba5;--line:#25323a;--soft:#1c262d;
+  --accent:#3dc2b0;--accent-ink:#06211d;--accent-soft:#12332f;--danger:#ff8a80;--danger-soft:#3a1d1b;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.45);color-scheme:dark}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--ui);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:env(safe-area-inset-top,0px) calc(90px + env(safe-area-inset-bottom,0px))}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+h1,h2,h3{text-wrap:balance;margin:0}
+
+.top,.wrap{max-width:1100px;margin:0 auto}
+.top{display:flex;align-items:center;gap:12px;padding:14px 0;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:19px;letter-spacing:-.01em}
+.mark{width:30px;height:30px;border-radius:9px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 12px;font:12.5px var(--mono);color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spacer{flex:1}
+.meter{min-width:160px}
+.meter span{display:block;font:12px var(--mono);color:var(--muted);margin-bottom:4px;font-variant-numeric:tabular-nums}
+.meter i{display:block;height:5px;border-radius:9px;background:var(--soft);overflow:hidden}
+.meter i b{display:block;height:100%;background:var(--accent);width:0;transition:width .4s}
+.icon{width:36px;height:36px;border-radius:9px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;padding:0}
+.icon:hover,.btn:hover{border-color:var(--accent)}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:8px 14px;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn.danger{color:var(--danger)}
+.btn.small{padding:5px 10px;font-size:13px}
+
+.wrap{display:grid;gap:14px}
+.drop{border:1.5px dashed var(--line);border-radius:14px;background:var(--surface);padding:22px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;transition:border-color .15s,background .15s}
+.drop.hot{border-style:solid;border-color:var(--accent);background:var(--accent-soft)}
+.drop .big{font-size:18px;font-weight:650;letter-spacing:-.01em}
+.drop p{margin:2px 0 0;color:var(--muted);font-size:13.5px}
+.drop .acts{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+
+.bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.crumbs{display:flex;align-items:center;gap:4px;flex-wrap:wrap;flex:1;min-width:0;font-weight:600}
+.crumbs button{border:0;background:none;padding:4px 6px;border-radius:6px;color:var(--muted);font-weight:600}
+.crumbs button:last-child{color:var(--ink)}
+.crumbs button:hover{background:var(--soft)}
+.crumbs span{color:var(--line)}
+.bar input[type=search],.bar select{border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:7px 11px;min-width:0}
+.bar input[type=search]{width:190px}
+.seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--surface)}
+.seg button{border:0;background:none;padding:7px 10px;display:grid;place-items:center}
+.seg button[aria-pressed=true]{background:var(--accent-soft);color:var(--accent)}
+
+.sel{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;border-radius:10px;background:var(--accent-soft)}
+.sel b{margin-right:auto}
+
+.list{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.row{display:grid;grid-template-columns:30px minmax(0,1fr) 92px 118px 108px;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.row:hover{background:var(--soft)}
+.row.on{background:var(--accent-soft)}
+.row .name{display:flex;align-items:center;gap:11px;min-width:0;border:0;background:none;padding:0;text-align:left}
+.row .fn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.row .meta{font:12.5px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.row .acts{display:flex;gap:4px;justify-content:flex-end}
+.row:hover .ico{background:var(--line)}
+.row:hover .ico.dir{background:var(--accent-soft)}
+.row .acts button{border:0;background:none;width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:var(--muted)}
+.row .acts button:hover{background:var(--surface);color:var(--ink)}
+.ico{width:34px;height:34px;border-radius:8px;background:var(--soft);display:grid;place-items:center;flex:none;font:700 10px var(--mono);color:var(--muted);overflow:hidden;text-transform:uppercase}
+.ico img{width:100%;height:100%;object-fit:cover}
+.ico.dir{background:var(--accent-soft);color:var(--accent)}
+.hdr{font:600 11.5px var(--ui);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--bg)}
+.hdr:hover{background:var(--bg)}
+.hdr button{border:0;background:none;padding:0;font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;text-align:left}
+
+.list.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:12px;background:none;border:0;border-radius:0;overflow:visible}
+.grid .hdr{display:none}
+.grid .row{display:block;position:relative;border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:0;overflow:hidden}
+.grid .row .name{display:block;width:100%}
+.grid .row .ico{width:100%;height:120px;border-radius:0;font-size:15px}
+.grid .row .fn{display:block;padding:9px 12px 2px}
+.grid .row .ico.dir svg{width:40px;height:40px}
+.grid .row .meta{display:block;padding:0 12px 10px}
+.grid .row .meta.date,.grid .row .acts{display:none}
+.grid .row .chk{position:absolute;top:8px;left:8px}
+.empty{padding:44px 16px;text-align:center;color:var(--muted)}
+
+.queue{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));width:min(380px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);z-index:20;overflow:hidden}
+.queue header{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line);font-weight:650}
+.queue header span{margin-left:auto;font:12px var(--mono);color:var(--muted)}
+.queue ul{list-style:none;margin:0;padding:0;max-height:240px;overflow:auto}
+.queue li{padding:8px 14px;font-size:13px;display:grid;gap:5px}
+.queue li div{display:flex;gap:8px;justify-content:space-between}
+.queue li div span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.queue li em{font:12px var(--mono);color:var(--muted);font-style:normal;flex:none}
+.queue li.err em{color:var(--danger)}
+.bar2{height:4px;background:var(--soft);border-radius:9px;overflow:hidden}
+.bar2 b{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+
+.overlay{position:fixed;inset:0;background:color-mix(in srgb,var(--accent) 22%,transparent);backdrop-filter:blur(3px);display:grid;place-items:center;z-index:50;font-size:20px;font-weight:650;pointer-events:none}
+.overlay div{background:var(--surface);border:2px dashed var(--accent);border-radius:16px;padding:28px 40px}
+
+dialog{border:1px solid var(--line);border-radius:16px;background:var(--surface);color:var(--ink);padding:0;box-shadow:var(--shadow);max-width:calc(100vw - 24px)}
+dialog::backdrop{background:rgba(5,12,16,.55)}
+.dlg{padding:20px;display:grid;gap:12px;width:min(520px,calc(100vw - 24px))}
+.dlg h2{font-size:19px;letter-spacing:-.01em}
+.dlg p,.dlg li{color:var(--muted);font-size:13.5px;margin:0}
+.dlg ol{margin:0;padding-left:20px;display:grid;gap:4px}
+.dlg label{display:grid;gap:4px;font-size:13px;font-weight:600}
+.dlg input{border:1px solid var(--line);background:var(--bg);border-radius:9px;padding:9px 11px;font-weight:400;min-width:0}
+.dlg .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.dlg .foot{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.dlg .err{color:var(--danger);background:var(--danger-soft);border-radius:8px;padding:8px 10px}
+.dlg a{color:var(--accent)}
+
+#viewer{width:min(1100px,calc(100vw - 24px));height:min(86vh,900px)}
+#viewer .vw{display:grid;grid-template-rows:auto 1fr;height:100%}
+#viewer .vh{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
+#viewer .vh b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+#viewer .vh .meta{font:12.5px var(--mono);color:var(--muted);flex:none}
+#viewer .vb{display:grid;place-items:center;overflow:auto;padding:14px;background:var(--bg);min-height:0}
+#viewer .vb img,#viewer .vb video{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px}
+#viewer .vb iframe{width:100%;height:100%;border:0;background:#fff;border-radius:8px}
+#viewer .vb pre{margin:0;align-self:start;justify-self:stretch;white-space:pre-wrap;word-break:break-word;font:13px/1.5 var(--mono)}
+#viewer .vb audio{width:min(520px,100%)}
+.load{width:min(320px,80%);display:grid;gap:8px;text-align:center;color:var(--muted);font:13px var(--mono)}
+
+.toasts{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);display:grid;gap:8px;z-index:60;width:max-content;max-width:calc(100vw - 32px)}
+.toast{background:var(--ink);color:var(--bg);padding:9px 14px;border-radius:10px;box-shadow:var(--shadow);font-size:14px}
+.toast.err{background:var(--danger);color:#fff}
+
+@media (max-width:640px){
+  .row{grid-template-columns:30px minmax(0,1fr) auto;padding:9px 12px}
+  .row .meta.date{display:none}
+  .row .meta.size{grid-column:2;grid-row:2;margin-top:-6px}
+  .bar input[type=search]{width:100%;flex:1 1 100%}
+  .drop .acts{margin-left:0}
+  .top{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:10px}
+  .top .spacer{display:none}
+  .chip{justify-self:start}
+  .meter{grid-column:1/-1;order:5}
+  .hdr{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <span class="mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V4"/><path d="m7 9 5-5 5 5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></span>
+    Stash
+  </div>
+  <button id="repoChip" class="chip" type="button" title="Storage settings">not connected</button>
+  <span class="spacer"></span>
+  <div class="meter" id="meter" hidden><span id="meterText"></span><i><b id="meterBar"></b></i></div>
+  <button id="themeBtn" class="icon" type="button" aria-label="Switch light or dark theme"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+  <button id="settingsBtn" class="icon" type="button" aria-label="Storage settings"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+</header>
+
+<main class="wrap">
+  <section id="drop" class="drop" aria-label="Upload">
+    <div>
+      <div class="big">Drop files or folders here</div>
+      <p>Stored exactly as they are. No compression, no resizing. <span id="dropTo"></span></p>
+    </div>
+    <div class="acts">
+      <button id="pickFiles" class="btn primary" type="button">Upload files</button>
+      <button id="pickDir" class="btn" type="button">Upload folder</button>
+    </div>
+    <input id="fileIn" type="file" multiple hidden>
+    <input id="dirIn" type="file" webkitdirectory multiple hidden>
+  </section>
+
+  <nav class="bar" aria-label="Folder">
+    <div class="crumbs" id="crumbs"></div>
+    <input id="search" type="search" placeholder="Search all files" aria-label="Search all files">
+    <select id="sort" aria-label="Sort by">
+      <option value="new">Newest first</option>
+      <option value="old">Oldest first</option>
+      <option value="name">Name</option>
+      <option value="big">Largest first</option>
+    </select>
+    <div class="seg" role="group" aria-label="View">
+      <button id="vList" type="button" aria-label="List view" aria-pressed="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></button>
+      <button id="vGrid" type="button" aria-label="Grid view" aria-pressed="false"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>
+    </div>
+    <button id="newFolder" class="btn" type="button">New folder</button>
+  </nav>
+
+  <div id="selBar" class="sel" hidden>
+    <b id="selText"></b>
+    <button id="selDl" class="btn small" type="button">Download</button>
+    <button id="selDel" class="btn small danger" type="button">Delete</button>
+    <button id="selClear" class="btn small" type="button">Clear</button>
+  </div>
+
+  <div id="list" class="list" role="list" aria-live="polite"></div>
+</main>
+
+<aside id="queue" class="queue" hidden aria-label="Uploads">
+  <header><span id="qTitle" style="margin-left:0;font:inherit;color:inherit">Uploading</span><span id="qSum"></span><button id="qClose" class="icon" type="button" aria-label="Hide uploads" style="width:28px;height:28px;border:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button></header>
+  <ul id="qList"></ul>
+</aside>
+
+<div id="overlay" class="overlay" hidden><div>Drop to upload to <b id="ovPath"></b></div></div>
+
+<dialog id="viewer" aria-label="Preview">
+  <div class="vw">
+    <div class="vh">
+      <button id="vPrev" class="icon" type="button" aria-label="Previous file"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+      <button id="vNext" class="icon" type="button" aria-label="Next file"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+      <b id="vName"></b><span class="spacer"></span><span id="vMeta" class="meta"></span>
+      <button id="vDl" class="btn small primary" type="button">Download</button>
+      <button id="vClose" class="icon" type="button" aria-label="Close preview"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="vb" id="vBody"></div>
+  </div>
+</dialog>
+
+<dialog id="settings" aria-label="Storage settings">
+  <form class="dlg" id="setForm" method="dialog">
+    <h2>Connect your storage</h2>
+    <p>Stash keeps every file in a GitHub repository you own. Your access token is saved only in this browser.</p>
+    <ol>
+      <li>Create a repository (private is best) and tick "Add a README".</li>
+      <li><a id="tokLink" target="_blank" rel="noopener">Open the token page</a>, choose "Only select repositories", pick that repository, then generate the token.</li>
+      <li>Paste the token below.</li>
+    </ol>
+    <div class="two">
+      <label for="fOwner">GitHub username<input id="fOwner" autocomplete="off" spellcheck="false" required></label>
+      <label for="fRepo">Repository<input id="fRepo" autocomplete="off" spellcheck="false" required></label>
+    </div>
+    <div class="two">
+      <label for="fBranch">Branch<input id="fBranch" autocomplete="off" spellcheck="false" value="main" required></label>
+      <label for="fToken">Access token<input id="fToken" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…" required></label>
+    </div>
+    <div id="setErr" class="err" hidden></div>
+    <div class="foot">
+      <button id="setForget" class="btn danger" type="button">Forget token</button>
+      <button id="setCancel" class="btn" type="button">Cancel</button>
+      <button id="setSave" class="btn primary" type="submit">Connect</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="confirm" aria-label="Confirm">
+  <form class="dlg" method="dialog">
+    <h2 id="cTitle"></h2>
+    <p id="cText"></p>
+    <div class="foot">
+      <button class="btn" value="no" type="submit">Cancel</button>
+      <button id="cYes" class="btn primary" value="yes" type="submit">Confirm</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="prompt" aria-label="Name">
+  <form class="dlg" method="dialog">
+    <h2 id="pTitle"></h2>
+    <label for="pInput">Name<input id="pInput" autocomplete="off" spellcheck="false" required></label>
+    <div class="foot">
+      <button class="btn" value="no" type="submit" formnovalidate>Cancel</button>
+      <button class="btn primary" value="yes" type="submit">Create</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toasts" class="toasts" role="status"></div>
+
+<script>
+'use strict';
+/* ---------- defaults: edit these two lines to change the pre-filled repository ---------- */
+const DEFAULTS = { owner: 'tom-mutua', repo: 'stash-files', branch: 'main' };
+
+/* ---------- small helpers ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage blocked */ } },
+  del(k) { try { localStorage.removeItem(k); } catch { /* storage blocked */ } }
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const pad4 = n => String(n).padStart(4, '0');
+const fmtSize = n => {
+  if (n < 1024) return n + ' B';
+  const u = ['KB', 'MB', 'GB', 'TB']; let i = -1;
+  do { n /= 1024; i++; } while (n >= 1024 && i < u.length - 1);
+  return n.toFixed(n >= 100 ? 0 : n >= 10 ? 1 : 2) + ' ' + u[i];
+};
+const fmtDate = ms => ms ? new Date(ms).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+
+const cfg = Object.assign({ owner: '', repo: '', branch: DEFAULTS.branch, token: '' }, LS.get('stash.cfg', {}));
+const API = 'https://api.github.com';
+const CHUNK = window.__chunk || 25 * 1024 * 1024;  // each stored blob stays far below GitHub's 100 MB limit
+const rp = () => `/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}`;
+const refPath = () => `${rp()}/git/ref/heads/${cfg.branch.split('/').map(encodeURIComponent).join('/')}`;
+const refsPath = () => `${rp()}/git/refs/heads/${cfg.branch.split('/').map(encodeURIComponent).join('/')}`;
+
+/* ---------- file kinds ---------- */
+const EXT = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif',
+  svg: 'image/svg+xml', bmp: 'image/bmp', ico: 'image/x-icon',
+  mp4: 'video/mp4', m4v: 'video/mp4', mov: 'video/quicktime', webm: 'video/webm', ogv: 'video/ogg',
+  mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav', ogg: 'audio/ogg', flac: 'audio/flac', aac: 'audio/aac', opus: 'audio/ogg',
+  pdf: 'application/pdf'
+};
+['txt', 'md', 'json', 'csv', 'tsv', 'log', 'xml', 'html', 'htm', 'css', 'js', 'ts', 'py', 'yml', 'yaml', 'ini', 'toml', 'sh', 'sql', 'tex']
+  .forEach(e => { EXT[e] = 'text/plain'; });
+const extOf = n => { const i = n.lastIndexOf('.'); return i > 0 ? n.slice(i + 1).toLowerCase() : ''; };
+const mimeOf = n => EXT[extOf(n)] || 'application/octet-stream';
+const kindOf = n => {
+  const m = mimeOf(n);
+  if (m.startsWith('image/')) return 'image';
+  if (m.startsWith('video/')) return 'video';
+  if (m.startsWith('audio/')) return 'audio';
+  if (m === 'application/pdf') return 'pdf';
+  if (m === 'text/plain') return 'text';
+  return 'file';
+};
+
+/* ---------- GitHub API ---------- */
+class GhError extends Error { constructor(status, msg, retryAfter) { super(msg); this.status = status; this.retryAfter = retryAfter || 0; } }
+const isLimit = e => e instanceof GhError && (e.status === 429 || (e.status === 403 && /rate|abuse|secondary/i.test(e.message)));
+const retriable = e => e instanceof TypeError || e.message === 'Network error' || (e instanceof GhError && (e.status >= 500 || isLimit(e)));
+async function retry(fn, tries = 4) {
+  for (let i = 0; ; i++) {
+    try { return await fn(); }
+    catch (e) {
+      const limit = isLimit(e);
+      if (i >= (limit ? 6 : tries) - 1 || !retriable(e)) throw e;
+      const wait = limit ? Math.min(e.retryAfter || 20 * (i + 1), 120) * 1000 : 900 * 2 ** i;
+      if (limit) hooks.note('GitHub asked us to slow down. Continuing in ' + Math.round(wait / 1000) + 's…');
+      await sleep(wait);
+    }
+  }
+}
+function headers(raw, json) {
+  return Object.assign({
+    Authorization: 'Bearer ' + cfg.token,
+    Accept: raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28'
+  }, json ? { 'Content-Type': 'application/json' } : {});
+}
+async function gh(path, { method = 'GET', body, raw = false } = {}) {
+  return retry(async () => {
+    const r = await fetch(API + path, { method, headers: headers(raw, body !== undefined), body: body !== undefined ? JSON.stringify(body) : undefined });
+    if (!r.ok) {
+      let m = r.statusText || 'Request failed';
+      try { m = (await r.json()).message || m; } catch { /* no json body */ }
+      throw new GhError(r.status, m, +r.headers.get('retry-after') || 0);
+    }
+    if (raw) return r;
+    return r.status === 204 ? null : r.json();
+  });
+}
+function explain(e) {
+  if (!(e instanceof GhError)) return e && e.message === 'Failed to fetch' ? 'Could not reach GitHub. Check your connection.' : (e && e.message) || 'Something went wrong.';
+  if (e.status === 401) return 'GitHub rejected the token. It may be mistyped or expired.';
+  if (e.status === 403) return /rate/i.test(e.message) ? 'GitHub rate limit reached. Wait a few minutes and try again.' : 'The token does not have permission. It needs read and write access to Contents for this repository.';
+  if (e.status === 404) return 'Repository or branch not found, or the token cannot see it. Check the names and the token\'s repository access.';
+  if (e.status === 422) return 'GitHub refused the change: ' + e.message;
+  return e.message;
+}
+
+/* ---------- repository model ---------- */
+const S = { head: null, entries: [], meta: { v: 1, files: {} }, files: new Map(), dirs: new Set(), total: 0, cwd: '', sel: new Set(), q: '', ready: false };
+
+async function ensureInit() {
+  try { return (await gh(refPath())).object.sha; }
+  catch (e) {
+    if (e instanceof GhError && e.status === 409 && /empty/i.test(e.message)) {
+      // brand-new empty repository: create the first commit so the Git Data API can be used
+      await gh(`${rp()}/contents/README.md`, { method: 'PUT', body: { message: 'Initialize Stash storage', content: btoa('# Stash storage\n\nFiles in `files/` are managed by the Stash web app.\n') } });
+      return (await gh(refPath())).object.sha;
+    }
+    throw e;
+  }
+}
+
+async function refresh() {
+  S.head = await ensureInit();
+  const commit = await gh(`${rp()}/git/commits/${S.head}`);
+  const t = await gh(`${rp()}/git/trees/${commit.tree.sha}?recursive=1`);
+  S.truncated = !!t.truncated;
+  S.entries = t.tree.filter(e => e.type === 'blob');
+  S.meta = { v: 1, files: {} };
+  const m = S.entries.find(e => e.path === '.stash/meta.json');
+  if (m) { try { S.meta = await (await gh(`${rp()}/git/blobs/${m.sha}`, { raw: true })).json(); if (!S.meta.files) S.meta.files = {}; } catch { /* dates are optional */ } }
+  buildIndex();
+  S.ready = true;
+}
+
+function addDirs(set, dir) {
+  if (!dir) return;
+  const p = dir.split('/');
+  for (let i = 1; i <= p.length; i++) set.add(p.slice(0, i).join('/'));
+}
+function buildIndex() {
+  const files = new Map(), dirs = new Set();
+  for (const e of S.entries) {
+    if (!e.path.startsWith('files/')) continue;
+    const p = e.path.slice(6);
+    if (p === '.keep' || p.endsWith('/.keep')) { addDirs(dirs, p.slice(0, -5)); continue; }
+    const m = p.match(/^(.*)\.parts\/(\d{4})$/);
+    if (m) {
+      let f = files.get(m[1]);
+      if (!f || !f.chunked) { f = { path: m[1], size: 0, parts: [], chunked: true }; files.set(m[1], f); }
+      f.parts[+m[2] - 1] = { sha: e.sha, size: e.size, path: e.path };
+      f.size += e.size;
+    } else files.set(p, { path: p, size: e.size, sha: e.sha, paths: [e.path] });
+  }
+  for (const f of files.values()) {
+    f.name = f.path.split('/').pop();
+    f.added = (S.meta.files[f.path] || {}).t || 0;
+    f.cat = kindOf(f.name);
+    f.type = mimeOf(f.name);
+    if (f.chunked) { f.paths = f.parts.filter(Boolean).map(x => x.path); f.complete = f.parts.every(Boolean); } else f.complete = true;
+    addDirs(dirs, f.path.split('/').slice(0, -1).join('/'));
+  }
+  S.files = files; S.dirs = dirs;
+  S.total = 0; for (const f of files.values()) S.total += f.size;
+}
+
+function listDir(dir) {
+  const pre = dir ? dir + '/' : '';
+  const folders = [], files = [];
+  for (const d of S.dirs) {
+    if (d.startsWith(pre)) { const r = d.slice(pre.length); if (r && !r.includes('/')) folders.push({ path: d, name: r }); }
+  }
+  for (const f of S.files.values()) {
+    if (f.path.startsWith(pre) && !f.path.slice(pre.length).includes('/')) files.push(f);
+  }
+  for (const d of folders) {
+    d.count = 0; d.size = 0; d.added = 0;
+    for (const f of S.files.values()) if (f.path.startsWith(d.path + '/')) { d.count++; d.size += f.size; d.added = Math.max(d.added, f.added); }
+  }
+  return { folders, files };
+}
+function searchFiles(q) {
+  q = q.toLowerCase();
+  return [...S.files.values()].filter(f => f.path.toLowerCase().includes(q));
+}
+
+/* ---------- hooks the UI fills in ---------- */
+const hooks = { data() {}, queue() {}, note() {} };
+const cleanName = n => {
+  n = n.replace(/[\u0000-\u001f\\]/g, '_').trim();
+  if (n === '.' || n === '..') return '';
+  return n.toLowerCase() === '.git' ? '_' + n : n;
+};
+const JUNK = new Set(['.DS_Store', 'Thumbs.db', 'desktop.ini']);
+
+/* ---------- saving changes: one commit through the Git Data API ---------- */
+async function saveChanges(entries, message, mutate) {
+  const meta = JSON.parse(JSON.stringify(S.meta));
+  if (mutate) mutate(meta);
+  const mb = await gh(`${rp()}/git/blobs`, { method: 'POST', body: { content: JSON.stringify(meta), encoding: 'utf-8' } });
+  const all = entries.concat([{ path: '.stash/meta.json', mode: '100644', type: 'blob', sha: mb.sha }]);
+  let last;
+  for (let a = 0; a < 4; a++) {
+    try {
+      const head = (await gh(refPath())).object.sha;
+      const c = await gh(`${rp()}/git/commits/${head}`);
+      const tree = await gh(`${rp()}/git/trees`, { method: 'POST', body: { base_tree: c.tree.sha, tree: all } });
+      const commit = await gh(`${rp()}/git/commits`, { method: 'POST', body: { message, tree: tree.sha, parents: [head] } });
+      await gh(refsPath(), { method: 'PATCH', body: { sha: commit.sha } });
+      try { await refresh(); } catch { S.meta = meta; }
+      hooks.data();
+      return;
+    } catch (e) {
+      last = e;
+      if (e instanceof GhError && (e.status === 422 || e.status === 409)) { await sleep(500 * (a + 1)); continue; }
+      throw e;
+    }
+  }
+  throw last;
+}
+
+/* ---------- upload queue ---------- */
+const Q = { items: [], running: false };
+let qSeq = 0;
+const qEmit = () => hooks.queue();
+
+function b64Of(blob) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => { const s = r.result; res(s.slice(s.indexOf(',') + 1)); };
+    r.onerror = () => rej(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+function postBlob(b64, onProg) {
+  return new Promise((res, rej) => {
+    const x = new XMLHttpRequest();
+    x.open('POST', API + rp() + '/git/blobs');
+    const h = headers(false, true);
+    for (const k in h) x.setRequestHeader(k, h[k]);
+    x.upload.onprogress = e => { if (e.lengthComputable) onProg(e.loaded / e.total); };
+    x.onload = () => {
+      let j = {}; try { j = JSON.parse(x.responseText); } catch { /* not json */ }
+      if (x.status >= 200 && x.status < 300 && j.sha) res(j.sha);
+      else rej(new GhError(x.status, j.message || 'HTTP ' + x.status, +x.getResponseHeader('retry-after') || 0));
+    };
+    x.onerror = () => rej(new Error('Network error'));
+    x.send(JSON.stringify({ content: b64, encoding: 'base64' }));
+  });
+}
+let lastBlob = 0;   // GitHub throttles bursts of content-creating requests, so blob uploads start at most ~1.2 per second
+async function pace() { const now = Date.now(), at = Math.max(now, lastBlob + 800); lastBlob = at; if (at > now) await sleep(at - now); }
+async function uploadItem(it) {
+  const n = Math.max(1, Math.ceil(it.size / CHUNK));
+  if (it.shas.length === n) return;           // already uploaded, only needs saving
+  it.shas = [];
+  for (let k = 0; k < n; k++) {
+    const slice = it.file.slice(k * CHUNK, Math.min(it.size, (k + 1) * CHUNK));
+    const b64 = await b64Of(slice);
+    it.shas.push(await retry(async () => { await pace(); return postBlob(b64, f => { it.prog = (k * CHUNK + f * slice.size) / Math.max(1, it.size); qEmit(); }); }));
+  }
+}
+function uniqueDest(base, parts, reserved) {
+  const dir = (base ? base + '/' : '') + parts.slice(0, -1).join('/');
+  const pre = dir ? dir.replace(/\/$/, '') + '/' : '';
+  const nm = parts[parts.length - 1];
+  const dot = nm.lastIndexOf('.');
+  const stem = dot > 0 ? nm.slice(0, dot) : nm, ext = dot > 0 ? nm.slice(dot) : '';
+  let cand = pre + nm, n = 1;
+  while (S.files.has(cand) || S.dirs.has(cand) || reserved.has(cand)) { n++; cand = `${pre}${stem} (${n})${ext}`; }
+  return cand;
+}
+function enqueue(entries, baseDir) {
+  if (!Q.running) Q.items = Q.items.filter(i => !i.committed);   // start a fresh list once the previous batch is saved
+  const reserved = new Set(Q.items.filter(i => !i.committed).map(i => i.dest));
+  let added = 0;
+  for (const { file, rel } of entries) {
+    const parts = rel.split('/').map(cleanName).filter(Boolean);
+    if (!parts.length || JUNK.has(parts[parts.length - 1])) continue;
+    const dest = uniqueDest(baseDir, parts, reserved);
+    reserved.add(dest);
+    Q.items.push({ id: ++qSeq, file, name: dest.split('/').pop(), dest, size: file.size, state: 'wait', prog: 0, shas: [], committed: false });
+    added++;
+  }
+  if (added) { qEmit(); run(); }
+  return added;
+}
+async function commitBatch(batch) {
+  const entries = [];
+  for (const it of batch) {
+    if (it.shas.length === 1) entries.push({ path: 'files/' + it.dest, mode: '100644', type: 'blob', sha: it.shas[0] });
+    else it.shas.forEach((sha, k) => entries.push({ path: `files/${it.dest}.parts/${pad4(k + 1)}`, mode: '100644', type: 'blob', sha }));
+  }
+  const now = Date.now();
+  try {
+    await saveChanges(entries, batch.length === 1 ? `Add ${batch[0].name}` : `Add ${batch.length} files`, m => { for (const it of batch) m.files[it.dest] = { t: now }; });
+    batch.forEach(i => { i.committed = true; });
+  } catch (e) {
+    batch.forEach(i => { i.state = 'err'; i.error = 'Not saved: ' + explain(e); });
+  }
+  qEmit();
+}
+let flushP = Promise.resolve();
+async function doFlush() {
+  for (;;) {
+    const batch = Q.items.filter(i => i.state === 'done' && !i.committed).slice(0, 200);
+    if (!batch.length) return;
+    await commitBatch(batch);
+  }
+}
+const flush = () => (flushP = flushP.then(doFlush, doFlush));
+
+async function run() {
+  if (Q.running) return;
+  Q.running = true; qEmit();
+  try {
+    const worker = async () => {
+      for (;;) {
+        const it = Q.items.find(i => i.state === 'wait');
+        if (!it) return;
+        it.state = 'up'; qEmit();
+        try { await uploadItem(it); it.state = 'done'; it.prog = 1; }
+        catch (e) { it.state = 'err'; it.error = explain(e); }
+        qEmit();
+        if (Q.items.filter(i => i.state === 'done' && !i.committed).length >= 40) flush();
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    await flush();
+  } finally { Q.running = false; qEmit(); }
+  if (Q.items.some(i => i.state === 'wait')) run();
+}
+function retryFailed() {
+  Q.items.forEach(i => { if (i.state === 'err') { i.state = i.shas.length && i.shas.length === Math.max(1, Math.ceil(i.size / CHUNK)) ? 'done' : 'wait'; i.error = ''; } });
+  qEmit(); run();
+}
+
+/* ---------- drag-and-drop folder reading ---------- */
+async function filesFromDrop(dt) {
+  const out = [];
+  const entries = [...(dt.items || [])].map(i => (i.kind === 'file' && i.webkitGetAsEntry ? i.webkitGetAsEntry() : null));
+  if (!entries.some(Boolean)) { for (const f of dt.files) out.push({ file: f, rel: f.name }); return out; }
+  const walk = async (en, prefix) => {
+    if (en.isFile) { out.push({ file: await new Promise((res, rej) => en.file(res, rej)), rel: prefix + en.name }); }
+    else if (en.isDirectory) {
+      const rd = en.createReader();
+      let batch;
+      do { batch = await new Promise((res, rej) => rd.readEntries(res, rej)); for (const c of batch) await walk(c, prefix + en.name + '/'); } while (batch.length);
+    }
+  };
+  for (const en of entries) if (en) await walk(en, '');
+  return out;
+}
+
+/* ---------- folders, rename, delete ---------- */
+async function makeFolder(path) {
+  const b = await gh(`${rp()}/git/blobs`, { method: 'POST', body: { content: '\n', encoding: 'utf-8' } });
+  await saveChanges([{ path: `files/${path}/.keep`, mode: '100644', type: 'blob', sha: b.sha }], `Create folder ${path.split('/').pop()}`);
+}
+async function renameItem(kind, path, newName) {
+  newName = cleanName(newName);
+  if (!newName || newName.includes('/')) throw new Error('That name is not valid.');
+  const parent = path.split('/').slice(0, -1).join('/');
+  const to = (parent ? parent + '/' : '') + newName;
+  if (to === path) return;
+  if (S.files.has(to) || S.dirs.has(to)) throw new Error('Something with that name already exists here.');
+  const from = 'files/' + path, dest = 'files/' + to;
+  const picks = kind === 'dir' ? S.entries.filter(e => e.path.startsWith(from + '/')) : S.files.get(path).paths.map(p => S.entries.find(e => e.path === p));
+  const entries = [];
+  for (const e of picks) {
+    entries.push({ path: dest + e.path.slice(from.length), mode: '100644', type: 'blob', sha: e.sha });
+    entries.push({ path: e.path, mode: '100644', type: 'blob', sha: null });
+  }
+  await saveChanges(entries, `Rename ${path.split('/').pop()} to ${newName}`, m => {
+    for (const k of Object.keys(m.files)) {
+      if (kind === 'dir' ? k.startsWith(path + '/') : k === path) { m.files[to + k.slice(path.length)] = m.files[k]; delete m.files[k]; }
+    }
+  });
+}
+async function deleteItems(items) {
+  const entries = [], gone = [], seen = new Set();
+  const drop = p => { if (!seen.has(p)) { seen.add(p); entries.push({ path: p, mode: '100644', type: 'blob', sha: null }); } };
+  for (const it of items) {
+    if (it.kind === 'dir') { for (const e of S.entries) if (e.path.startsWith('files/' + it.path + '/')) drop(e.path); gone.push(it.path + '/'); }
+    else { const f = S.files.get(it.path); if (f) { f.paths.forEach(drop); gone.push(it.path); } }
+  }
+  if (!entries.length) return;
+  await saveChanges(entries, items.length === 1 ? `Delete ${items[0].path.split('/').pop()}` : `Delete ${items.length} items`, m => {
+    for (const k of Object.keys(m.files)) if (gone.some(g => (g.endsWith('/') ? k.startsWith(g) : k === g))) delete m.files[k];
+  });
+}
+
+/* ---------- reading files back ---------- */
+async function fetchPart(sha, onBytes) {
+  const r = await gh(`${rp()}/git/blobs/${sha}`, { raw: true });
+  if (!r.body || !r.body.getReader) { const b = await r.blob(); onBytes && onBytes(b.size); return b; }
+  const rd = r.body.getReader(), chunks = [];
+  let got = 0;
+  for (;;) { const { done, value } = await rd.read(); if (done) break; chunks.push(value); got += value.length; onBytes && onBytes(got); }
+  return new Blob(chunks);
+}
+const blobCache = new Map();
+async function getFileBlob(f, onProg) {
+  const key = f.chunked ? f.parts.map(p => p.sha).join() : f.sha;
+  if (blobCache.has(key)) { const b = blobCache.get(key); blobCache.delete(key); blobCache.set(key, b); onProg && onProg(1); return b; }
+  const list = f.chunked ? f.parts : [{ sha: f.sha, size: f.size }];
+  const pieces = [];
+  let base = 0;
+  for (const p of list) { pieces.push(await fetchPart(p.sha, g => onProg && onProg((base + g) / Math.max(1, f.size)))); base += p.size; }
+  const blob = new Blob(pieces, { type: f.type });
+  if (blob.size <= 200 * 1024 * 1024) blobCache.set(key, blob);   // keep only modest files in memory
+  while (blobCache.size > 4) blobCache.delete(blobCache.keys().next().value);
+  return blob;
+}
+function saveBlob(blob, name) {
+  const u = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(u), 60000);
+}
+
+/* ---------- DOM helper (names are always inserted as text, never as HTML) ---------- */
+function h(tag, props, ...kids) {
+  const e = document.createElement(tag);
+  for (const k in props || {}) {
+    const v = props[k];
+    if (v === undefined || v === null || v === false) continue;
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (v === true) e.setAttribute(k, '');
+    else e.setAttribute(k, v);
+  }
+  for (const c of kids.flat()) { if (c === null || c === undefined || c === false) continue; e.append(c.nodeType ? c : document.createTextNode(String(c))); }
+  return e;
+}
+const svg = (d, w = 17) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const IC = {
+  dl: svg('<path d="M12 4v11"/><path d="m7 11 5 5 5-5"/><path d="M4 19h16"/>'),
+  ren: svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>'),
+  del: svg('<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>'),
+  dir: svg('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>', 18)
+};
+
+let view = LS.get('stash.view', 'list');
+let sortBy = LS.get('stash.sort', 'new');
+let viewList = [];
+const SORT = {
+  new: (a, b) => b.added - a.added || a.name.localeCompare(b.name),
+  old: (a, b) => a.added - b.added || a.name.localeCompare(b.name),
+  name: (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }),
+  big: (a, b) => b.size - a.size || a.name.localeCompare(b.name)
+};
+const SOFT_LIMIT = 5 * 1024 ** 3;   // GitHub recommends keeping a repository under about 5 GB
+
+/* ---------- navigation (folder lives in the URL hash so Back works) ---------- */
+const hashToDir = () => decodeURIComponent((location.hash || '').replace(/^#\/?/, '')).replace(/\/+$/, '');
+function go(dir) {
+  S.q = ''; $('#search').value = ''; S.sel.clear();
+  const nh = dir ? '#/' + dir.split('/').map(encodeURIComponent).join('/') : '#';
+  if (location.hash === nh || (!dir && !location.hash)) { S.cwd = dir; render(); } else location.hash = nh;
+}
+
+/* ---------- chrome: header, breadcrumbs, upload target ---------- */
+function renderChrome() {
+  const chip = $('#repoChip');
+  chip.textContent = cfg.owner && cfg.repo ? `${cfg.owner}/${cfg.repo}` : 'not connected';
+  const meter = $('#meter');
+  meter.hidden = !S.ready;
+  if (S.ready) {
+    $('#meterText').textContent = `${fmtSize(S.total)} stored · ${S.files.size} file${S.files.size === 1 ? '' : 's'}`;
+    $('#meterBar').style.width = Math.max(1, Math.min(100, S.total / SOFT_LIMIT * 100)) + '%';
+    $('#meter').title = `GitHub suggests keeping a repository under about ${fmtSize(SOFT_LIMIT)}.`;
+  }
+  const c = $('#crumbs'); c.textContent = '';
+  const parts = S.cwd ? S.cwd.split('/') : [];
+  c.append(h('button', { type: 'button', onclick: () => go('') }, 'All files'));
+  parts.forEach((p, i) => { c.append(h('span', {}, '/'), h('button', { type: 'button', onclick: () => go(parts.slice(0, i + 1).join('/')) }, p)); });
+  $('#dropTo').textContent = 'Uploading to ' + (S.cwd ? '/' + S.cwd : 'the top folder') + '.';
+  $('#vList').setAttribute('aria-pressed', view === 'list');
+  $('#vGrid').setAttribute('aria-pressed', view === 'grid');
+  $('#sort').value = sortBy;
+}
+
+/* ---------- list ---------- */
+function currentItems() {
+  if (S.q) return searchFiles(S.q).map(f => Object.assign({ kind: 'file' }, f)).sort(SORT[sortBy]);
+  const { folders, files } = listDir(S.cwd);
+  folders.sort(SORT.name);
+  return folders.map(d => Object.assign({ kind: 'dir' }, d)).concat(files.sort(SORT[sortBy]).map(f => Object.assign({ kind: 'file' }, f)));
+}
+function headerRow() {
+  const b = (label, mode, alt) => h('button', { type: 'button', onclick: () => setSort(sortBy === mode && alt ? alt : mode) }, label);
+  return h('div', { class: 'row hdr', role: 'presentation' }, h('span'), b('Name', 'name'), b('Size', 'big'), b('Added', 'new', 'old'), h('span'));
+}
+function rowEl(it) {
+  const key = (it.kind === 'dir' ? 'd:' : 'f:') + it.path;
+  const on = S.sel.has(key);
+  const chk = h('input', { type: 'checkbox', class: 'chk', checked: on, 'aria-label': 'Select ' + it.name });
+  const ico = h('span', { class: 'ico' + (it.kind === 'dir' ? ' dir' : '') }, it.kind === 'dir' ? '' : it.complete === false ? '!' : extOf(it.name).slice(0, 4) || 'file');
+  if (it.kind === 'dir') ico.innerHTML = IC.dir;
+  const parent = S.q && it.path.includes('/') ? it.path.split('/').slice(0, -1).join('/') : '';
+  const name = h('button', { type: 'button', class: 'name', title: it.path, onclick: () => (it.kind === 'dir' ? go(it.path) : openViewer(viewList.findIndex(f => f.path === it.path))) },
+    ico, h('span', { class: 'fn' }, it.name, parent ? h('small', { style: 'color:var(--muted);margin-left:8px' }, parent) : null));
+  const mk = (title, icon, fn) => { const b = h('button', { type: 'button', title, 'aria-label': title + ' ' + it.name, onclick: fn }); b.innerHTML = icon; return b; };
+  const acts = h('div', { class: 'acts' },
+    it.kind === 'file' ? mk('Download', IC.dl, () => actDownload(it)) : null,
+    mk('Rename', IC.ren, () => actRename(it)),
+    mk('Delete', IC.del, () => actDelete([it])));
+  const r = h('div', { class: 'row' + (on ? ' on' : ''), role: 'listitem' }, chk, name,
+    h('span', { class: 'meta size' }, it.kind === 'dir' ? `${it.count} item${it.count === 1 ? '' : 's'}` : fmtSize(it.size)),
+    h('span', { class: 'meta date' }, fmtDate(it.added) || '—'), acts);
+  chk.addEventListener('change', () => { chk.checked ? S.sel.add(key) : S.sel.delete(key); r.classList.toggle('on', chk.checked); updateSel(); });
+  if (view === 'grid' && it.kind === 'file' && it.cat === 'image' && it.size <= 8 * 1024 * 1024 && it.complete) { ico.dataset.thumb = it.path; ico.textContent = ''; }
+  return r;
+}
+function statusBlock() {
+  if (S.error) return h('div', { class: 'empty' }, h('p', {}, S.error), h('p', {}, h('button', { class: 'btn primary', type: 'button', onclick: () => load() }, 'Try again'), ' ', h('button', { class: 'btn', type: 'button', onclick: () => openSettings() }, 'Settings')));
+  if (!cfg.token) return h('div', { class: 'empty' }, h('p', {}, 'Connect a GitHub repository to start storing files.'), h('button', { class: 'btn primary', type: 'button', onclick: () => openSettings() }, 'Connect storage'));
+  return h('div', { class: 'empty' }, 'Loading your files…');
+}
+function render() {
+  renderChrome();
+  const box = $('#list');
+  box.className = 'list' + (view === 'grid' ? ' grid' : '');
+  box.textContent = '';
+  if (!S.ready) { box.append(statusBlock()); updateSel(); return; }
+  const items = currentItems();
+  viewList = items.filter(i => i.kind === 'file');
+  if (!items.length) {
+    box.append(h('div', { class: 'empty' }, S.q ? `No files match "${S.q}".` : 'Nothing here yet. Drop files above to store them.'));
+    updateSel(); return;
+  }
+  if (view === 'list') box.append(headerRow());
+  for (const it of items) box.append(rowEl(it));
+  if (S.truncated) box.append(h('div', { class: 'empty' }, 'This repository is very large, so GitHub returned only part of the file list.'));
+  updateSel(); observeThumbs();
+}
+function updateSel() {
+  const n = S.sel.size;
+  $('#selBar').hidden = !n;
+  $('#selText').textContent = `${n} selected`;
+}
+function setSort(v) { sortBy = v; LS.set('stash.sort', v); render(); }
+function setView(v) { view = v; LS.set('stash.view', v); render(); }
+
+/* ---------- thumbnails (grid view, images up to 8 MB, loaded as they scroll into view) ---------- */
+const thumbs = new Map();
+let thumbBusy = 0;
+const thumbWait = [];
+const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { io.unobserve(e.target); queueThumb(e.target); } }), { rootMargin: '200px' }) : null;
+function observeThumbs() { document.querySelectorAll('.ico[data-thumb]').forEach(el => (io ? io.observe(el) : queueThumb(el))); }
+function queueThumb(el) { thumbWait.push(el); pumpThumbs(); }
+async function pumpThumbs() {
+  while (thumbBusy < 2 && thumbWait.length) {
+    const el = thumbWait.shift(); const f = S.files.get(el.dataset.thumb);
+    if (!f || !el.isConnected) continue;
+    thumbBusy++;
+    (async () => {
+      try {
+        const key = f.sha || f.path;
+        if (!thumbs.has(key)) {
+          const blob = await getFileBlob(f);
+          thumbs.set(key, URL.createObjectURL(blob));
+          if (thumbs.size > 80) { const k = thumbs.keys().next().value; URL.revokeObjectURL(thumbs.get(k)); thumbs.delete(k); }
+        }
+        if (el.isConnected) el.replaceChildren(h('img', { src: thumbs.get(key), alt: '', loading: 'lazy' }));
+      } catch { el.textContent = extOf(f.name); }
+      finally { thumbBusy--; pumpThumbs(); }
+    })();
+  }
+}
+
+/* ---------- toasts and small dialogs ---------- */
+function toast(msg, err) {
+  const t = h('div', { class: 'toast' + (err ? ' err' : '') }, msg);
+  $('#toasts').append(t);
+  setTimeout(() => t.remove(), err ? 7000 : 3200);
+}
+function askConfirm(title, text, yes = 'Confirm') {
+  return new Promise(res => {
+    const d = $('#confirm');
+    $('#cTitle').textContent = title; $('#cText').textContent = text; $('#cYes').textContent = yes;
+    d.returnValue = '';
+    d.addEventListener('close', () => res(d.returnValue === 'yes'), { once: true });
+    d.showModal();
+  });
+}
+function askName(title, initial, cta) {
+  return new Promise(res => {
+    const d = $('#prompt'), i = $('#pInput');
+    $('#pTitle').textContent = title; i.value = initial || ''; d.querySelector('.primary').textContent = cta || 'Save';
+    d.returnValue = '';
+    d.addEventListener('close', () => res(d.returnValue === 'yes' ? i.value.trim() : null), { once: true });
+    d.showModal(); i.focus(); i.select();
+  });
+}
+async function working(fn) {
+  document.body.style.cursor = 'progress';
+  try { return await fn(); } finally { document.body.style.cursor = ''; }
+}
+
+/* ---------- actions ---------- */
+async function actDownload(f) {
+  try { toast('Preparing ' + f.name + '…'); saveBlob(await getFileBlob(f), f.name); }
+  catch (e) { toast(explain(e), true); }
+}
+async function actRename(it) {
+  const nn = await askName('Rename ' + (it.kind === 'dir' ? 'folder' : 'file'), it.name, 'Rename');
+  if (!nn || nn === it.name) return;
+  try { await working(() => renameItem(it.kind, it.path, nn)); toast('Renamed'); } catch (e) { toast(explain(e), true); }
+}
+async function actDelete(items) {
+  const label = items.length === 1 ? `"${items[0].name}"` : `${items.length} items`;
+  const hasDir = items.some(i => i.kind === 'dir');
+  if (!await askConfirm('Delete ' + label + '?', `This removes ${hasDir ? 'the folder and everything inside it' : 'the file'} from Stash. GitHub keeps the old commits, but the ${hasDir ? 'items' : 'file'} will no longer appear here.`, 'Delete')) return;
+  try { await working(() => deleteItems(items.map(i => ({ kind: i.kind, path: i.path })))); S.sel.clear(); toast('Deleted'); render(); }
+  catch (e) { toast(explain(e), true); }
+}
+async function actNewFolder() {
+  if (!S.ready) return toast('Connect your storage first.', true);
+  const n = await askName('New folder', '', 'Create');
+  if (!n) return;
+  const cn = cleanName(n);
+  if (!cn || cn.includes('/')) return toast('That name is not valid.', true);
+  const path = (S.cwd ? S.cwd + '/' : '') + cn;
+  if (S.dirs.has(path) || S.files.has(path)) return toast('That name already exists here.', true);
+  try { await working(() => makeFolder(path)); toast('Folder created'); } catch (e) { toast(explain(e), true); }
+}
+const selectedItems = () => [...S.sel].map(k => ({ kind: k[0] === 'd' ? 'dir' : 'file', path: k.slice(2), name: k.split('/').pop().replace(/^[df]:/, '') }));
+
+/* ---------- viewer ---------- */
+let vIdx = -1, vUrl = null, vTok = 0;
+const revokeV = () => { if (vUrl) { URL.revokeObjectURL(vUrl); vUrl = null; } };
+async function openViewer(i) {
+  if (i < 0 || i >= viewList.length) return;
+  vIdx = i;
+  const f = viewList[i], tok = ++vTok, d = $('#viewer'), body = $('#vBody');
+  if (!d.open) d.showModal();
+  $('#vName').textContent = f.name;
+  $('#vMeta').textContent = fmtSize(f.size) + (f.added ? ' · ' + fmtDate(f.added) : '');
+  $('#vPrev').disabled = i === 0; $('#vNext').disabled = i === viewList.length - 1;
+  revokeV(); body.textContent = '';
+  if (f.complete === false) { body.append(h('p', {}, 'Some parts of this file are missing from the repository.')); return; }
+  if (f.size > 300 * 1024 * 1024 && !f.force) {
+    body.append(h('div', { class: 'load' }, h('p', {}, `This file is ${fmtSize(f.size)}. Previewing it uses about that much memory.`),
+      h('div', {}, h('button', { class: 'btn primary', type: 'button', onclick: () => actDownload(f) }, 'Download'), ' ',
+        h('button', { class: 'btn', type: 'button', onclick: () => { f.force = true; openViewer(i); } }, 'Preview anyway'))));
+    return;
+  }
+  const bar = h('b'), pct = h('span', {}, 'Loading 0%');
+  body.append(h('div', { class: 'load' }, pct, h('div', { class: 'bar2' }, bar)));
+  try {
+    const blob = await getFileBlob(f, p => { if (tok === vTok) { bar.style.width = (p * 100).toFixed(0) + '%'; pct.textContent = 'Loading ' + (p * 100).toFixed(0) + '%'; } });
+    if (tok !== vTok) return;
+    body.textContent = '';
+    if (f.cat === 'text') { body.append(h('pre', {}, await blob.slice(0, 300000).text() + (blob.size > 300000 ? '\n\n… preview shortened, download for the full file' : ''))); return; }
+    vUrl = URL.createObjectURL(blob);
+    if (f.cat === 'image') body.append(h('img', { src: vUrl, alt: f.name }));
+    else if (f.cat === 'video') body.append(h('video', { src: vUrl, controls: true, playsinline: true }));
+    else if (f.cat === 'audio') body.append(h('audio', { src: vUrl, controls: true }));
+    else if (f.cat === 'pdf') body.append(h('iframe', { src: vUrl, title: f.name }));
+    else body.append(h('div', { class: 'load' }, h('p', {}, 'No preview for this type of file.'), h('button', { class: 'btn primary', type: 'button', onclick: () => actDownload(f) }, 'Download')));
+  } catch (e) { if (tok === vTok) { body.textContent = ''; body.append(h('p', {}, explain(e))); } }
+}
+
+/* ---------- upload queue panel ---------- */
+let qHidden = false, qRaf = 0, qClear = 0;
+const qRetry = h('button', { class: 'btn small', type: 'button', hidden: true, onclick: retryFailed }, 'Retry');
+hooks.queue = () => { if (!qRaf) qRaf = requestAnimationFrame(() => { qRaf = 0; renderQueue(); }); };
+hooks.data = () => render();
+hooks.note = m => toast(m);
+function renderQueue() {
+  const box = $('#queue'), items = Q.items;
+  if (!items.length || (qHidden && !Q.running)) { box.hidden = true; return; }
+  box.hidden = false;
+  const total = items.reduce((a, i) => a + i.size, 0) || 1;
+  const sent = items.reduce((a, i) => a + (i.state === 'done' || i.committed ? i.size : i.prog * i.size), 0);
+  const errs = items.filter(i => i.state === 'err').length;
+  const pending = items.filter(i => !i.committed && i.state !== 'err').length;
+  $('#qTitle').textContent = pending ? `Uploading ${pending} file${pending === 1 ? '' : 's'}` : errs ? `${errs} failed` : `Saved ${items.length} file${items.length === 1 ? '' : 's'}`;
+  $('#qSum').textContent = pending ? Math.floor(sent / total * 100) + '%' : '';
+  qRetry.hidden = !errs || !!pending;
+  const ul = $('#qList'); ul.textContent = '';
+  for (const it of items.slice(-30)) {
+    const label = it.committed ? 'Saved' : it.state === 'err' ? it.error : it.state === 'done' ? 'Saving…' : it.state === 'up' ? Math.floor(it.prog * 100) + '%' : 'Waiting';
+    ul.append(h('li', { class: it.state === 'err' ? 'err' : '' },
+      h('div', {}, h('span', { title: it.dest }, it.name), h('em', {}, label)),
+      h('div', { class: 'bar2' }, h('b', { style: `width:${it.committed || it.state === 'done' ? 100 : Math.floor(it.prog * 100)}%` }))));
+  }
+  if (!pending && !errs && !qClear) {
+    qClear = setTimeout(() => { qClear = 0; if (!Q.running && !Q.items.some(i => !i.committed)) { Q.items = []; qEmit(); } }, 5000);
+  }
+}
+function addEntries(entries) {
+  if (!S.ready) { toast('Connect your storage first.', true); openSettings(); return; }
+  qHidden = false;
+  if (!enqueue(entries, S.cwd)) toast('Nothing to upload.');
+}
+
+/* ---------- settings ---------- */
+const setErr = m => { const e = $('#setErr'); e.hidden = !m; e.textContent = m || ''; };
+function updTokLink() {
+  $('#tokLink').href = 'https://github.com/settings/personal-access-tokens/new?name=Stash&description=' + encodeURIComponent('Upload and browse files in my Stash repository') +
+    '&target_name=' + encodeURIComponent($('#fOwner').value.trim() || DEFAULTS.owner) + '&expires_in=365&contents=write';
+}
+function openSettings(msg) {
+  $('#fOwner').value = cfg.owner || DEFAULTS.owner; $('#fRepo').value = cfg.repo || DEFAULTS.repo; $('#fBranch').value = cfg.branch || DEFAULTS.branch;
+  $('#fToken').value = ''; $('#fToken').required = !cfg.token;
+  $('#fToken').placeholder = cfg.token ? 'Saved in this browser. Leave blank to keep it.' : 'github_pat_…';
+  $('#setForget').hidden = !cfg.token;
+  setErr(msg); updTokLink();
+  if (!$('#settings').open) $('#settings').showModal();
+}
+async function load() {
+  S.error = ''; S.ready = false; render();
+  try { await refresh(); } catch (e) { S.error = explain(e); S.ready = false; }
+  S.cwd = hashToDir(); render();
+}
+
+/* ---------- wiring ---------- */
+function boot() {
+  const th = LS.get('stash.theme', null);
+  if (th) document.documentElement.dataset.theme = th;
+  $('#queue header').insertBefore(qRetry, $('#qClose'));
+  if (!('webkitdirectory' in $('#dirIn'))) $('#pickDir').hidden = true;
+
+  $('#themeBtn').onclick = () => {
+    const cur = document.documentElement.dataset.theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const nx = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = nx; LS.set('stash.theme', nx);
+  };
+  $('#settingsBtn').onclick = $('#repoChip').onclick = () => openSettings();
+  $('#setCancel').onclick = () => $('#settings').close();
+  $('#fOwner').addEventListener('input', updTokLink);
+  $('#setForget').onclick = () => { cfg.token = ''; LS.set('stash.cfg', cfg); S.ready = false; $('#settings').close(); render(); toast('Token removed from this browser'); };
+  $('#setForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const prev = Object.assign({}, cfg);
+    Object.assign(cfg, { owner: $('#fOwner').value.trim(), repo: $('#fRepo').value.trim(), branch: $('#fBranch').value.trim() || 'main', token: $('#fToken').value.trim() || cfg.token });
+    $('#setSave').disabled = true; setErr('');
+    try {
+      const repo = await gh(rp());
+      if (repo.permissions && repo.permissions.push === false) throw new Error('This token can read the repository but not write to it. Give it "Contents: Read and write".');
+      S.ready = false; await refresh();
+      LS.set('stash.cfg', cfg); $('#settings').close();
+      S.cwd = hashToDir(); render(); toast('Connected to ' + cfg.owner + '/' + cfg.repo);
+    } catch (err) { Object.assign(cfg, prev); setErr(explain(err)); }
+    finally { $('#setSave').disabled = false; }
+  });
+  $('#pInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('#prompt .primary').click(); } });
+
+  $('#pickFiles').onclick = () => $('#fileIn').click();
+  $('#pickDir').onclick = () => $('#dirIn').click();
+  $('#fileIn').onchange = e => { addEntries([...e.target.files].map(f => ({ file: f, rel: f.name }))); e.target.value = ''; };
+  $('#dirIn').onchange = e => { addEntries([...e.target.files].map(f => ({ file: f, rel: f.webkitRelativePath || f.name }))); e.target.value = ''; };
+  $('#newFolder').onclick = actNewFolder;
+  $('#vList').onclick = () => setView('list'); $('#vGrid').onclick = () => setView('grid');
+  $('#sort').onchange = e => setSort(e.target.value);
+  let st = 0;
+  $('#search').addEventListener('input', e => { clearTimeout(st); st = setTimeout(() => { S.q = e.target.value.trim(); render(); }, 120); });
+  $('#qClose').onclick = () => { qHidden = true; $('#queue').hidden = true; };
+
+  $('#selClear').onclick = () => { S.sel.clear(); render(); };
+  $('#selDel').onclick = () => actDelete(selectedItems());
+  $('#selDl').onclick = async () => {
+    const files = selectedItems().filter(i => i.kind === 'file').map(i => S.files.get(i.path)).filter(Boolean);
+    if (!files.length) return toast('Select files to download. Folders cannot be downloaded directly.', true);
+    for (const f of files) { await actDownload(f); await sleep(400); }
+  };
+
+  $('#vClose').onclick = () => $('#viewer').close();
+  $('#vPrev').onclick = () => openViewer(vIdx - 1); $('#vNext').onclick = () => openViewer(vIdx + 1);
+  $('#vDl').onclick = () => { if (viewList[vIdx]) actDownload(viewList[vIdx]); };
+  $('#viewer').addEventListener('close', () => { vTok++; revokeV(); $('#vBody').textContent = ''; });
+  $('#viewer').addEventListener('keydown', e => { if (e.key === 'ArrowLeft') openViewer(vIdx - 1); if (e.key === 'ArrowRight') openViewer(vIdx + 1); });
+
+  let depth = 0;
+  const hasFiles = e => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+  const hideDrop = () => { depth = 0; $('#overlay').hidden = true; $('#drop').classList.remove('hot'); };
+  addEventListener('dragenter', e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault(); depth++;
+    $('#ovPath').textContent = S.cwd ? '/' + S.cwd : 'the top folder';
+    $('#overlay').hidden = false; $('#drop').classList.add('hot');
+  });
+  addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
+  addEventListener('dragleave', e => { if (hasFiles(e) && --depth <= 0) hideDrop(); });
+  addEventListener('drop', async e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault(); hideDrop();
+    try { addEntries(await filesFromDrop(e.dataTransfer)); } catch (err) { toast('Could not read the dropped items.', true); }
+  });
+  addEventListener('paste', e => {
+    const fs = [...((e.clipboardData && e.clipboardData.files) || [])];
+    if (!fs.length || /input|textarea/i.test((document.activeElement || {}).tagName || '')) return;
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    addEntries(fs.map((f, i) => ({ file: f, rel: /^image\.\w+$/i.test(f.name) ? `Pasted ${stamp}-${i + 1}${f.name.slice(f.name.lastIndexOf('.'))}` : f.name })));
+  });
+  addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'a' && !/input|textarea|select/i.test((document.activeElement || {}).tagName || '') && !document.querySelector('dialog[open]') && S.ready) {
+      e.preventDefault(); currentItems().forEach(i => S.sel.add((i.kind === 'dir' ? 'd:' : 'f:') + i.path)); render();
+    }
+  });
+  addEventListener('beforeunload', e => { if (Q.running || Q.items.some(i => !i.committed && i.state !== 'err')) { e.preventDefault(); e.returnValue = ''; } });
+  addEventListener('hashchange', () => { S.cwd = hashToDir(); S.sel.clear(); render(); });
+
+  S.cwd = hashToDir();
+  if (!cfg.token || !cfg.owner || !cfg.repo) { render(); openSettings(); } else load();
+}
+boot();
+
+</script>
+</body>
+</html>
